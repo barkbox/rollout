@@ -33,7 +33,7 @@ class Rollout
     feature_pos = Rollout::Feature.new("bm_pos")
     # need to save the pos feature explicitly so it's not recreated as the default
     $rollout.save(feature_pos)
-    # this will sub in for a user array -- 10k users
+    # this will sub in for a user array -- 25k users
     puts "creating user array"
     y = Array.new(25000).map{|e| SecureRandom.uuid}
     puts "adding 25k members, redis"
