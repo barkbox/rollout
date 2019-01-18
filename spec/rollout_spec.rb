@@ -3,21 +3,20 @@ require "pp"
 
 RSpec.describe "Rollout" do
   [:STORE_RS, :STORE_POS].each do |store_type|
-
     context "with storage" do
       before do
         @redis   = Redis.new
-        @rollout = Rollout.new(@redis, {:storage_type => store_type})
-      end      
+        @rollout = Rollout.new(@redis, { storage_type: store_type })
+      end
 
-      describe "when tests start for a storage type" do 
-        it "make sure new featues are objects with the correct type" do
+      describe "when tests start for a storage type" do
+        it "make sure new features are objects with the correct type" do
           expect(@rollout.exists?(store_type)).to be(false)
           expect(@rollout.get(store_type).class).to eq(Rollout::FeatureRS) if store_type == :STORE_RS
           expect(@rollout.get(store_type).class).to eq(Rollout::Feature) if store_type == :STORE_POS
         end
       end
-      
+
       describe "when a group is activated" do
         before do
           @rollout.define_group(:fivesonly) { |user| user.id == 5 }
@@ -238,7 +237,6 @@ RSpec.describe "Rollout" do
         end
       end
 
-
       describe 'set a group of users' do
         it 'should replace the users with the given array' do
           users = %w(1 2 3 4)
@@ -440,10 +438,10 @@ RSpec.describe "Rollout" do
           expect(feature.percentage).to eq 10
           expect(feature.users).to eq %w(42)
           expect(feature.to_hash).to eq(
-                                       groups: [:caretakers, :greeters],
-                                       percentage: 10,
-                                       users: %w(42)
-                                     )
+            groups: [:caretakers, :greeters],
+            percentage: 10,
+            users: %w(42)
+          )
 
           feature = @rollout.get(:signup)
           expect(feature.groups).to be_empty
@@ -460,10 +458,10 @@ RSpec.describe "Rollout" do
           expect(feature.percentage).to eq 10
           expect(feature.users).to eq %w(42).to_set
           expect(feature.to_hash).to eq(
-                                       groups: [:caretakers, :greeters].to_set,
-                                       percentage: 10,
-                                       users: %w(42).to_set
-                                     )
+            groups: [:caretakers, :greeters].to_set,
+            percentage: 10,
+            users: %w(42).to_set
+          )
 
           feature = @rollout.get(:signup)
           expect(feature.groups).to be_empty
@@ -484,10 +482,10 @@ RSpec.describe "Rollout" do
         it "each feature is cleared" do
           features.each do |feature|
             expect(@rollout.get(feature).to_hash).to eq(
-                                                       percentage: 0,
-                                                       users: [],
-                                                       groups: []
-                                                     )
+              percentage: 0,
+              users: [],
+              groups: []
+            )
           end
         end
 
@@ -496,10 +494,10 @@ RSpec.describe "Rollout" do
           @options[:use_sets] = true
           features.each do |feature|
             expect(@rollout.get(feature).to_hash).to eq(
-                                                       percentage: 0,
-                                                       users: Set.new,
-                                                       groups: Set.new
-                                                     )
+              percentage: 0,
+              users: Set.new,
+              groups: Set.new
+            )
           end
         end
 

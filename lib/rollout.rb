@@ -4,12 +4,11 @@ require "set"
 require "json"
 
 class Rollout
-
   attr_accessor :options
 
   RAND_BASE = (2**32 - 1) / 100.0
-  REDIS_SET_TOKEN = "__RS__"
-  
+  REDIS_SET_TOKEN = "__RS__".freeze
+
   # Some simple timing for common operations on medium sized sets -- doesn't need to
   # run as part of tests, but good to have handy in dev to check we're getting the
   # improvements we expect.
@@ -27,29 +26,41 @@ class Rollout
   # 16.360000   1.740000  18.100000 ( 18.120741)
   # deactivate 25k members, plain-old-strings
   # 249.480000  24.980000 274.460000 (286.155507)
-  
+
   def self._benchmarks
-    feature_rs = Rollout::FeatureRS.new("bm_rs")
+    _feature_rs = Rollout::FeatureRS.new("bm_rs")
     feature_pos = Rollout::Feature.new("bm_pos")
     # need to save the pos feature explicitly so it's not recreated as the default
     $rollout.save(feature_pos)
     # this will sub in for a user array -- 25k users
     puts "creating user array"
-    y = Array.new(25000).map{|e| SecureRandom.uuid}
+    y = Array.new(25000).map { |_e| SecureRandom.uuid }
     puts "adding 25k members, redis"
-    puts Benchmark.measure{y.map{|e| $rollout.activate_user(:bm_rs, e)}} # 16.9 secs 
+    puts Benchmark.measure do
+      y.map { |e| $rollout.activate_user(:bm_rs, e) } # 16.9 secs
+    end
     puts "adding 25k members, plain-old-strings"
-    puts Benchmark.measure{y.map{|e| $rollout.activate_user(:bm_pos, e)}} # 198.5 secs
+    puts Benchmark.measure do
+      y.map { |e| $rollout.activate_user(:bm_pos, e) } # 198.5 secs
+    end
     puts "checking 25k members, redis"
-    puts Benchmark.measure{25000.times {$rollout.active?(:bm_rs, y.sample)}}
+    puts Benchmark.measure do
+      25000.times { $rollout.active?(:bm_rs, y.sample) }
+    end
     puts "checking 25k members, plain-old-strings"
-    puts Benchmark.measure{25000.times {$rollout.active?(:bm_pos, y.sample)}}
+    puts Benchmark.measure do
+      25000.times { $rollout.active?(:bm_pos, y.sample) }
+    end
     puts "deactiveate 25k members, redis"
-    puts Benchmark.measure{25000.times {$rollout.deactivate_user(:bm_rs, y.sample)}}
+    puts Benchmark.measure do
+      25000.times { $rollout.deactivate_user(:bm_rs, y.sample) }
+    end
     puts "deactivate 25k members, plain-old-strings"
-    puts Benchmark.measure{25000.times {$rollout.deactivate_user(:bm_pos, y.sample)}}
+    puts Benchmark.measure do
+      25000.times { $rollout.deactivate_user(:bm_pos, y.sample) }
+    end
   end
-  
+
   # With the change to support redis sets for membership, both the Feature class
   # and the Rollout class need to hold a reference to storage, so we'll break it
   # out into shared state
@@ -65,23 +76,23 @@ class Rollout
   # Feature class, but store some data server-side in Redis. Don't require
   # local copy of server side data for membership operations. Don't overwrite
   # all server side user/membership data with changed local copy
-  
-  class FeatureRS
 
+  class FeatureRS
     attr_accessor :percentage, :data
     attr_reader :name, :options
-    
+
     def initialize(name, string = nil, opts = {})
       @options = opts
       @name = name
       @groups = Storage.store.smembers(group_storage_key).map(&:to_sym)
       @groups = @groups.to_set if opts[:use_sets]
       if string
-        raw_percentage,raw_users,raw_groups,raw_data = string.split('|', 4)
+        raw_percentage, _raw_users, _raw_groups, raw_data = string.split('|', 4)
         # the last portion of the data string is a magic token that the factory uses to
         # correctly instantiate the right Feture type -- need to parse that out and can
         # throw away ( it's added back during serializtion )
-        raw_data, tok_throwaway = [raw_data.rpartition('|').first, raw_data.rpartition('|').last]
+        _tok_throwaway = raw_data.rpartition('|').last
+        raw_data = raw_data.rpartition('|').first
         @percentage = raw_percentage.to_f
         @data = raw_data.nil? || raw_data.strip.empty? ? {} : JSON.parse(raw_data)
       else
@@ -92,18 +103,18 @@ class Rollout
     def groups
       @groups = Storage.store.smembers(group_storage_key).sort.map(&:to_sym)
       @groups = @groups.to_set if @options[:use_sets]
-      return @groups
+      @groups
     end
 
     def groups=(groups)
-      Storage.store.del(group_storage_key)  
+      Storage.store.del(group_storage_key)
       Storage.store.sadd(group_storage_key, groups) if !groups.empty?
     end
-    
+
     def users
       @users = Storage.store.smembers(user_storage_key)
-      @users = @users.to_set if @options[:use_sets] 
-      return @users
+      @users = @users.to_set if @options[:use_sets]
+      @users
     end
 
     def users=(new_users)
@@ -152,7 +163,7 @@ class Rollout
         id = user_id(user)
         user_in_percentage?(id) ||
           user_in_active_users?(id) ||
-            user_in_active_group?(user, rollout)
+          user_in_active_group?(user, rollout)
       else
         @percentage == 100
       end
@@ -171,52 +182,53 @@ class Rollout
     end
 
     private
-      def user_id(user)
-        if user.is_a?(Integer) || user.is_a?(String)
-          user.to_s
-        else
-          user.send(id_user_by).to_s
-        end
-      end
 
-      def id_user_by
-        @options[:id_user_by] || :id
+    def user_id(user)
+      if user.is_a?(Integer) || user.is_a?(String)
+        user.to_s
+      else
+        user.send(id_user_by).to_s
       end
+    end
 
-      def user_in_percentage?(user)
-        Zlib.crc32(user_id_for_percentage(user)) < RAND_BASE * @percentage
-      end
+    def id_user_by
+      @options[:id_user_by] || :id
+    end
 
-      def user_id_for_percentage(user)
-        if @options[:randomize_percentage]
-          user_id(user).to_s + @name.to_s
-        else
-          user_id(user)
-        end
-      end
+    def user_in_percentage?(user)
+      Zlib.crc32(user_id_for_percentage(user)) < RAND_BASE * @percentage
+    end
 
-      def user_in_active_group?(user, rollout)
-        @groups.any? do |g|
-          rollout.active_in_group?(g, user)
-        end
+    def user_id_for_percentage(user)
+      if @options[:randomize_percentage]
+        user_id(user).to_s + @name.to_s
+      else
+        user_id(user)
       end
+    end
 
-      def serialize_data
-        return "" unless @data.is_a? Hash
-        @data.to_json
+    def user_in_active_group?(user, rollout)
+      @groups.any? do |g|
+        rollout.active_in_group?(g, user)
       end
+    end
+
+    def serialize_data
+      return "" unless @data.is_a? Hash
+      @data.to_json
+    end
   end
-  
+
   class Feature
     attr_accessor :groups, :users, :percentage, :data
     attr_reader :name, :options
-    
+
     def initialize(name, string = nil, opts = {})
       @options = opts
       @name    = name
 
       if string
-        raw_percentage,raw_users,raw_groups,raw_data = string.split('|', 4)
+        raw_percentage, raw_users, raw_groups, raw_data = string.split('|', 4)
         @percentage = raw_percentage.to_f
         @users = users_from_string(raw_users)
         @groups = groups_from_string(raw_groups)
@@ -227,7 +239,7 @@ class Rollout
     end
 
     def serialize
-      "#{@percentage}|#{@users.to_a.join(",")}|#{@groups.to_a.join(",")}|#{serialize_data}"
+      "#{@percentage}|#{@users.to_a.join(',')}|#{@groups.to_a.join(',')}|#{serialize_data}"
     end
 
     def add_user(user)
@@ -259,7 +271,7 @@ class Rollout
         id = user_id(user)
         user_in_percentage?(id) ||
           user_in_active_users?(id) ||
-            user_in_active_group?(user, rollout)
+          user_in_active_group?(user, rollout)
       else
         @percentage == 100
       end
@@ -278,65 +290,66 @@ class Rollout
     end
 
     private
-      def user_id(user)
-        if user.is_a?(Integer) || user.is_a?(String)
-          user.to_s
-        else
-          user.send(id_user_by).to_s
-        end
-      end
 
-      def id_user_by
-        @options[:id_user_by] || :id
+    def user_id(user)
+      if user.is_a?(Integer) || user.is_a?(String)
+        user.to_s
+      else
+        user.send(id_user_by).to_s
       end
+    end
 
-      def user_in_percentage?(user)
-        Zlib.crc32(user_id_for_percentage(user)) < RAND_BASE * @percentage
-      end
+    def id_user_by
+      @options[:id_user_by] || :id
+    end
 
-      def user_id_for_percentage(user)
-        if @options[:randomize_percentage]
-          user_id(user).to_s + @name.to_s
-        else
-          user_id(user)
-        end
-      end
+    def user_in_percentage?(user)
+      Zlib.crc32(user_id_for_percentage(user)) < RAND_BASE * @percentage
+    end
 
-      def user_in_active_group?(user, rollout)
-        @groups.any? do |g|
-          rollout.active_in_group?(g, user)
-        end
+    def user_id_for_percentage(user)
+      if @options[:randomize_percentage]
+        user_id(user).to_s + @name.to_s
+      else
+        user_id(user)
       end
+    end
 
-      def serialize_data
-        return "" unless @data.is_a? Hash
-        @data.to_json
+    def user_in_active_group?(user, rollout)
+      @groups.any? do |g|
+        rollout.active_in_group?(g, user)
       end
+    end
 
-      def users_from_string(raw_users)
-        users = (raw_users || "").split(",").map(&:to_s)
-        if @options[:use_sets]
-          users.to_set
-        else
-          users
-        end
-      end
+    def serialize_data
+      return "" unless @data.is_a? Hash
+      @data.to_json
+    end
 
-      def groups_from_string(raw_groups)
-        groups = (raw_groups || "").split(",").map(&:to_sym)
-        if @options[:use_sets]
-          groups.to_set
-        else
-          groups
-        end
+    def users_from_string(raw_users)
+      users = (raw_users || "").split(",").map(&:to_s)
+      if @options[:use_sets]
+        users.to_set
+      else
+        users
       end
+    end
+
+    def groups_from_string(raw_groups)
+      groups = (raw_groups || "").split(",").map(&:to_sym)
+      if @options[:use_sets]
+        groups.to_set
+      else
+        groups
+      end
+    end
   end
 
   def initialize(storage, opts = {})
     Storage::store = storage
     @storage = storage
     @options = opts
-    @groups  = { all: lambda { |user| true } }
+    @groups  = { all: lambda { |_user| true } }
   end
 
   def activate(feature)
@@ -346,9 +359,7 @@ class Rollout
   end
 
   def deactivate(feature)
-    with_feature(feature) do |f|
-      f.clear
-    end
+    with_feature(feature, &:clear)
   end
 
   def delete(feature)
@@ -394,20 +405,20 @@ class Rollout
 
   def activate_users(feature, users)
     with_feature(feature) do |f|
-      users.each{|user| f.add_user(user)}
+      users.each { |user| f.add_user(user) }
     end
   end
 
   def deactivate_users(feature, users)
     with_feature(feature) do |f|
-      users.each{|user| f.remove_user(user)}
+      users.each { |user| f.remove_user(user) }
     end
   end
 
   def set_users(feature, users)
     with_feature(feature) do |f|
       f.users = []
-      users.each{|user| f.add_user(user)}
+      users.each { |user| f.add_user(user) }
     end
   end
 
@@ -443,12 +454,12 @@ class Rollout
 
   def active_in_group?(group, user)
     f = @groups[group.to_sym]
-    f && f.call(user)
+    f&.call(user)
   end
 
   def get(feature)
     string = @storage.get(key(feature))
-    FeatureFactory.Feature(feature, string, @options)
+    FeatureFactory.feature(feature, string, @options)
   end
 
   def set_feature_data(feature, data)
@@ -464,8 +475,8 @@ class Rollout
   end
 
   def multi_get(*features)
-    feature_keys = features.map{ |feature| key(feature) }
-    @storage.mget(*feature_keys).map.with_index { |string, index| FeatureFactory.Feature(features[index], string, @options) }
+    feature_keys = features.map { |feature| key(feature) }
+    @storage.mget(*feature_keys).map.with_index { |string, index| FeatureFactory.feature(features[index], string, @options) }
   end
 
   def features
@@ -486,7 +497,7 @@ class Rollout
 
   def clear!
     features.each do |feature|
-      with_feature(feature) { |f| f.clear }
+      with_feature(feature, &:clear)
       @storage.del(key(feature))
     end
 
@@ -517,7 +528,7 @@ class Rollout
     yield(f)
     save(f)
   end
-  
+
   class FeatureFactory
     # Class will instantiate the correct type of feature class based on config with a
     # nod to backwards compatibility
@@ -528,16 +539,17 @@ class Rollout
     #   to deploy the gem when there's already existing Features in place and have then co-exist
     #   any migration needs to be handled manually for now
     #
-    @@DEFAULT_FEATURE_STORE = Rollout::FeatureRS 
-    
-    def self.Feature(name, string, opts={})
-      return feature_class(string, opts).new(name, string, opts)
+    DEFAULT_FEATURE_STORE = Rollout::FeatureRS
+
+    def self.feature(name, string, opts = {})
+      feature_class(string, opts).new(name, string, opts)
     end
 
-    def self.feature_class(string, opts={})
+    def self.feature_class(string, opts = {})
       return Rollout::FeatureRS if opts && opts[:storage_type] == :STORE_RS
       return Rollout::Feature if opts && opts[:storage_type] == :STORE_POS
-      return @@DEFAULT_FEATURE_STORE if string.nil?
+      return DEFAULT_FEATURE_STORE if string.nil?
+
       if string.include?(Rollout::REDIS_SET_TOKEN)
         return Rollout::FeatureRS
       else
@@ -546,4 +558,3 @@ class Rollout
     end
   end
 end
-
