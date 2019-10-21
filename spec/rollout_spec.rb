@@ -677,6 +677,43 @@ RSpec.describe "Rollout" do
           expect(@rollout.exists?(:chat)).to be false
         end
       end
+
+      describe 'Write and read history' do
+        it 'should write history when you do a thing' do
+          @rollout.activate(:sup, uid=3, comment='some words')
+
+          history = @rollout.get_most_recent_history(:sup)
+
+          expect(history[:op]).to eq :update
+          expect(history[:uid]).to eq 3
+          expect(history[:timestamp].to_i).to be_within(10).of(Time.now.to_i)
+          expect(history[:new_value]).to eq '100'
+          expect(history[:comment]).to eq 'some words'
+
+          @rollout.deactivate(:sup, uid=4, comment='bye bye!')
+
+          history = @rollout.get_most_recent_history(:sup)
+
+          expect(history[:op]).to eq :clear
+          expect(history[:uid]).to eq 4
+          expect(history[:timestamp].to_i).to be_within(10).of(Time.now.to_i)
+          expect(history[:new_value]).to eq '0'
+          expect(history[:comment]).to eq 'bye bye!'
+
+          history = @rollout.get_full_history(:sup)
+
+          expect(history[0][:op]).to eq :clear
+          expect(history[0][:uid]).to eq 4
+          expect(history[0][:timestamp].to_i).to be_within(10).of(Time.now.to_i)
+          expect(history[0][:new_value]).to eq '0'
+          expect(history[0][:comment]).to eq 'bye bye!'
+          expect(history[1][:op]).to eq :update
+          expect(history[1][:uid]).to eq 3
+          expect(history[1][:timestamp].to_i).to be_within(10).of(Time.now.to_i)
+          expect(history[1][:new_value]).to eq '100'
+          expect(history[1][:comment]).to eq 'some words'
+        end
+      end
     end
 
     describe "Rollout::Feature" do
