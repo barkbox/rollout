@@ -79,15 +79,13 @@ class Rollout
 
   class FeatureRS
     attr_accessor :percentage, :data
-    attr_reader :name, :options, :uid, :comment
+    attr_reader :name, :options
 
     def initialize(name, string = nil, opts = {})
       @options = opts
       @name = name
       @groups = Storage.store.smembers(group_storage_key).map(&:to_sym)
       @groups = @groups.to_set if opts[:use_sets]
-      @uid     = nil
-      @comment = nil
       if string
         raw_percentage, _raw_users, _raw_groups, raw_data = string.split('|', 4)
         # the last portion of the data string is a magic token that the factory uses to
@@ -175,11 +173,6 @@ class Rollout
       Storage.store.sismember(user_storage_key, user_id(user))
     end
 
-    def update_history(uid, comment)
-      @uid = uid
-      @comment = comment
-    end
-
     def to_hash
       {
         percentage: @percentage,
@@ -228,13 +221,11 @@ class Rollout
 
   class Feature
     attr_accessor :groups, :users, :percentage, :data
-    attr_reader :name, :options, :uid, :comment
+    attr_reader :name, :options
 
     def initialize(name, string = nil, opts = {})
       @options = opts
       @name    = name
-      @uid     = nil
-      @comment = nil
 
       if string
         raw_percentage, raw_users, raw_groups, raw_data = string.split('|', 4)
@@ -288,11 +279,6 @@ class Rollout
 
     def user_in_active_users?(user)
       @users.include?(user_id(user))
-    end
-
-    def update_history(uid, comment)
-      @uid = uid
-      @comment = comment
     end
 
     def to_hash
@@ -369,16 +355,14 @@ class Rollout
   def activate(feature, uid = nil, comment = nil)
     with_feature(feature) do |f|
       f.percentage = 100
-      f.update_history(uid, comment) unless uid.nil? && comment.nil?
-      write_history(f, :update)
+      write_history(f, :update, uid, comment)
     end
   end
 
   def deactivate(feature, uid = nil, comment = nil)
     with_feature(feature) do |f|
       f.clear
-      f.update_history(uid, comment) unless uid.nil? && comment.nil?
-      write_history(f, :clear)
+      write_history(f, :clear, uid, comment)
     end
   end
 
@@ -464,6 +448,7 @@ class Rollout
     with_feature(feature) do |f|
       f.percentage = percentage
     end
+    # TODO -- add percentage history!
   end
 
   def deactivate_percentage(feature)
@@ -519,8 +504,7 @@ class Rollout
     features.each do |feature|
       with_feature(feature) do |f|
         f.clear
-        f.update_history(uid, comment) unless uid.nil? && comment.nil?
-        write_history(f, :clear)
+        write_history(f, :clear, uid, comment)
       end
       @storage.del(key(feature))
     end
@@ -550,11 +534,11 @@ class Rollout
     end
   end
 
-  def write_history(feature, op)
-    if feature.uid || feature.comment
+  def write_history(feature, op, uid, comment)
+    if uid || comment
       Storage.store.lpush(
         history_key(feature.name),
-        create_history_record(op, feature)
+        create_history_record(feature, op, uid, comment)
       )
     end
   end
@@ -579,8 +563,8 @@ class Rollout
     "feature_history:#{name}"
   end
 
-  def create_history_record(op, feature)
-    "#{op} #{feature.uid} #{Time.now.to_i} #{feature.percentage} #{feature.comment}"
+  def create_history_record(feature, op, uid, comment)
+    "#{op} #{uid} #{Time.now.to_i} #{feature.percentage} #{comment}"
   end
 
   def parse_history_record(str)
