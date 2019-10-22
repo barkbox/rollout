@@ -712,6 +712,8 @@ RSpec.describe "Rollout" do
           expect(history[1][:timestamp].to_i).to be_within(10).of(Time.now.to_i)
           expect(history[1][:new_value]).to eq '100'
           expect(history[1][:comment]).to eq 'some words'
+
+          expect(@rollout.get_full_history(:dope_feature_name, 2).length).to eq 2
         end
 
         it 'should record percentage changes in history' do

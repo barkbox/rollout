@@ -529,7 +529,7 @@ class Rollout
   end
 
   def get_full_history(feature, max = -1)
-    history = @storage.lrange(history_key(feature), 0, max) || []
+    history = @storage.lrange(history_key(feature), 0, max > 0 ? max - 1 : max) || []
     history.map do |entry|
       parse_history_record(entry)
     end
