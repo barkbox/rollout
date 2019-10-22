@@ -366,6 +366,14 @@ class Rollout
     end
   end
 
+  def add_history(feature, op, uid, comment)
+    raise ArgumentError, 'op cannot contain space characters' if op.to_s.include? ' '
+
+    with_feature(feature) do |f|
+    write_history(f, op, uid, comment)
+    end
+  end
+
   def delete(feature)
     features = (@storage.get(features_key) || "").split(",")
     features.delete(feature.to_s)

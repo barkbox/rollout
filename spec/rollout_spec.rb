@@ -730,6 +730,20 @@ RSpec.describe "Rollout" do
           expect(history[3]).to include(op: :activate_percentage, uid: 3, new_value: '33', comment: 'thirty-three!')
         end
       end
+
+      it 'can handle single freeform history additions' do
+        @rollout.activate(:dope_feature_name, uid=1, comment='yo')
+        @rollout.add_history(:dope_feature_name, 'an_operation', 1, 'added some stuff')
+
+        history = @rollout.get_full_history(:dope_feature_name)
+
+        expect(history[0]).to include(op: :an_operation, uid: 1, comment: 'added some stuff')
+        expect(history[1]).to include(op: :update, uid: 1, new_value: '100', comment: 'yo')
+
+        expect {
+          @rollout.add_history(:dope_feature_name, 'with a space', 1, 'blah blah')
+        }.to raise_error(ArgumentError)
+      end
     end
 
     describe "Rollout::Feature" do
