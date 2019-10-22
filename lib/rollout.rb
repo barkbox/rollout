@@ -523,7 +523,7 @@ class Rollout
   end
 
   def get_most_recent_history(feature)
-    entry = Storage.store.lindex(history_key(feature), 0)
+    entry = @storage.lindex(history_key(feature), 0)
     return nil if entry.nil?
     parse_history_record(entry)
   end
@@ -537,7 +537,7 @@ class Rollout
 
   def write_history(feature, op, uid, comment)
     if uid || comment
-      Storage.store.lpush(
+      @storage.lpush(
         history_key(feature.name),
         create_history_record(feature, op, uid, comment)
       )
