@@ -444,16 +444,17 @@ class Rollout
     !active?(feature, user)
   end
 
-  def activate_percentage(feature, percentage)
+  def activate_percentage(feature, percentage, uid=nil, comment=nil)
     with_feature(feature) do |f|
       f.percentage = percentage
+      write_history(f, :activate_percentage, uid, comment)
     end
-    # TODO -- add percentage history!
   end
 
-  def deactivate_percentage(feature)
+  def deactivate_percentage(feature, uid=nil, comment=nil)
     with_feature(feature) do |f|
       f.percentage = 0
+      write_history(f, :deactivate_percentage, uid, comment)
     end
   end
 

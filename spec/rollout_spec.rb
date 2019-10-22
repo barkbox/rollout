@@ -680,9 +680,9 @@ RSpec.describe "Rollout" do
 
       describe 'Write and read history' do
         it 'should write history when you do a thing' do
-          @rollout.activate(:sup, uid=3, comment='some words')
+          @rollout.activate(:dope_feature_name, uid=3, comment='some words')
 
-          history = @rollout.get_most_recent_history(:sup)
+          history = @rollout.get_most_recent_history(:dope_feature_name)
 
           expect(history[:op]).to eq :update
           expect(history[:uid]).to eq 3
@@ -690,9 +690,9 @@ RSpec.describe "Rollout" do
           expect(history[:new_value]).to eq '100'
           expect(history[:comment]).to eq 'some words'
 
-          @rollout.deactivate(:sup, uid=4, comment='bye bye!')
+          @rollout.deactivate(:dope_feature_name, uid=4, comment='bye bye!')
 
-          history = @rollout.get_most_recent_history(:sup)
+          history = @rollout.get_most_recent_history(:dope_feature_name)
 
           expect(history[:op]).to eq :clear
           expect(history[:uid]).to eq 4
@@ -700,7 +700,7 @@ RSpec.describe "Rollout" do
           expect(history[:new_value]).to eq '0'
           expect(history[:comment]).to eq 'bye bye!'
 
-          history = @rollout.get_full_history(:sup)
+          history = @rollout.get_full_history(:dope_feature_name)
 
           expect(history[0][:op]).to eq :clear
           expect(history[0][:uid]).to eq 4
@@ -712,6 +712,20 @@ RSpec.describe "Rollout" do
           expect(history[1][:timestamp].to_i).to be_within(10).of(Time.now.to_i)
           expect(history[1][:new_value]).to eq '100'
           expect(history[1][:comment]).to eq 'some words'
+        end
+
+        it 'should record percentage changes in history' do
+          @rollout.activate_percentage(:dope_feature_name, 33, uid=3, comment='thirty-three!')
+          @rollout.deactivate_percentage(:dope_feature_name, uid=4, comment='now off')
+          @rollout.activate_percentage(:dope_feature_name, 66, uid=5, comment='sixty-six!')
+          @rollout.activate(:dope_feature_name, uid=6, comment='lets go for it')
+
+          history = @rollout.get_full_history(:dope_feature_name)
+
+          expect(history[0]).to include(op: :update, uid: 6, new_value: '100', comment: 'lets go for it')
+          expect(history[1]).to include(op: :activate_percentage, uid: 5, new_value: '66', comment: 'sixty-six!')
+          expect(history[2]).to include(op: :deactivate_percentage, uid: 4, new_value: '0', comment: 'now off')
+          expect(history[3]).to include(op: :activate_percentage, uid: 3, new_value: '33', comment: 'thirty-three!')
         end
       end
     end
