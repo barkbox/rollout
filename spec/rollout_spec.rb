@@ -744,6 +744,19 @@ RSpec.describe "Rollout" do
           @rollout.add_history(:dope_feature_name, 'with a space', 1, 'blah blah')
         }.to raise_error(ArgumentError)
       end
+
+      it 'records changes to activating and deactivating users' do
+        @rollout.activate(:dope_feature_name, uid=1, comment='yo')
+        @rollout.activate_users(:dope_feature_name, [1, 2, 3, 4], uid=1, comment='lol')
+        @rollout.deactivate_users(:dope_feature_name, [2, 4], uid=1)
+        @rollout.set_users(:dope_feature_name, [5, 6], uid=1)
+
+
+        history = @rollout.get_full_history(:dope_feature_name)
+        expect(history[0]).to include(op: :set_users)
+        expect(history[1]).to include(op: :deactivate_users)
+        expect(history[2]).to include(op: :activate_users)
+      end
     end
 
     describe "Rollout::Feature" do
