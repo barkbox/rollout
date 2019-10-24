@@ -572,7 +572,7 @@ class Rollout
   end
 
   def history_key(name)
-    "feature_history:#{name}"
+    "feature:#{name}:history"
   end
 
   def create_history_record(feature, op, uid, comment)

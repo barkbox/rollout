@@ -751,7 +751,6 @@ RSpec.describe "Rollout" do
         @rollout.deactivate_users(:dope_feature_name, [2, 4], uid=1)
         @rollout.set_users(:dope_feature_name, [5, 6], uid=1)
 
-
         history = @rollout.get_full_history(:dope_feature_name)
         expect(history[0]).to include(op: :set_users)
         expect(history[1]).to include(op: :deactivate_users)
