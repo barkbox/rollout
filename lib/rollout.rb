@@ -415,21 +415,21 @@ class Rollout
     end
   end
 
-  def activate_users(feature, users, uid=nil, comment=nil)
+  def activate_users(feature, users, uid = nil, comment =  nil)
     with_feature(feature) do |f|
       users.each { |user| f.add_user(user) }
       write_history(f, :activate_users, uid, comment)
     end
   end
 
-  def deactivate_users(feature, users, uid=nil, comment=nil)
+  def deactivate_users(feature, users, uid  = nil, comment = nil)
     with_feature(feature) do |f|
       users.each { |user| f.remove_user(user) }
       write_history(f, :deactivate_users, uid, comment)
     end
   end
 
-  def set_users(feature, users, uid=nil, comment=nil)
+  def set_users(feature, users, uid = nil, comment = nil)
     with_feature(feature) do |f|
       f.users = []
       users.each { |user| f.add_user(user) }
@@ -455,14 +455,14 @@ class Rollout
     !active?(feature, user)
   end
 
-  def activate_percentage(feature, percentage, uid=nil, comment=nil)
+  def activate_percentage(feature, percentage, uid = nil, comment = nil)
     with_feature(feature) do |f|
       f.percentage = percentage
       write_history(f, :activate_percentage, uid, comment)
     end
   end
 
-  def deactivate_percentage(feature, uid=nil, comment=nil)
+  def deactivate_percentage(feature, uid = nil, comment = nil)
     with_feature(feature) do |f|
       f.percentage = 0
       write_history(f, :deactivate_percentage, uid, comment)
