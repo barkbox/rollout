@@ -352,14 +352,26 @@ class Rollout
     @groups  = { all: lambda { |_user| true } }
   end
 
-  def activate(feature)
+  def activate(feature, uid = nil, comment = nil)
     with_feature(feature) do |f|
       f.percentage = 100
+      write_history(f, :update, uid, comment)
     end
   end
 
-  def deactivate(feature)
-    with_feature(feature, &:clear)
+  def deactivate(feature, uid = nil, comment = nil)
+    with_feature(feature) do |f|
+      f.clear
+      write_history(f, :clear, uid, comment)
+    end
+  end
+
+  def add_history(feature, op, uid, comment)
+    raise ArgumentError, 'op cannot contain space characters' if op.to_s.include? ' '
+
+    with_feature(feature) do |f|
+    write_history(f, op, uid, comment)
+    end
   end
 
   def delete(feature)
@@ -403,22 +415,25 @@ class Rollout
     end
   end
 
-  def activate_users(feature, users)
+  def activate_users(feature, users, uid = nil, comment =  nil)
     with_feature(feature) do |f|
       users.each { |user| f.add_user(user) }
+      write_history(f, :activate_users, uid, comment)
     end
   end
 
-  def deactivate_users(feature, users)
+  def deactivate_users(feature, users, uid  = nil, comment = nil)
     with_feature(feature) do |f|
       users.each { |user| f.remove_user(user) }
+      write_history(f, :deactivate_users, uid, comment)
     end
   end
 
-  def set_users(feature, users)
+  def set_users(feature, users, uid = nil, comment = nil)
     with_feature(feature) do |f|
       f.users = []
       users.each { |user| f.add_user(user) }
+      write_history(f, :set_users, uid, comment)
     end
   end
 
@@ -440,15 +455,17 @@ class Rollout
     !active?(feature, user)
   end
 
-  def activate_percentage(feature, percentage)
+  def activate_percentage(feature, percentage, uid = nil, comment = nil)
     with_feature(feature) do |f|
       f.percentage = percentage
+      write_history(f, :activate_percentage, uid, comment)
     end
   end
 
-  def deactivate_percentage(feature)
+  def deactivate_percentage(feature, uid = nil, comment = nil)
     with_feature(feature) do |f|
       f.percentage = 0
+      write_history(f, :deactivate_percentage, uid, comment)
     end
   end
 
@@ -495,9 +512,12 @@ class Rollout
     end
   end
 
-  def clear!
+  def clear!(uid = nil, comment = nil)
     features.each do |feature|
-      with_feature(feature, &:clear)
+      with_feature(feature) do |f|
+        f.clear
+        write_history(f, :clear, uid, comment)
+      end
       @storage.del(key(feature))
     end
 
@@ -511,6 +531,28 @@ class Rollout
   def save(feature)
     @storage.set(key(feature.name), feature.serialize)
     @storage.set(features_key, (features | [feature.name.to_sym]).join(","))
+  end
+
+  def get_most_recent_history(feature)
+    entry = @storage.lindex(history_key(feature), 0)
+    return nil if entry.nil?
+    parse_history_record(entry)
+  end
+
+  def get_full_history(feature, max = -1)
+    history = @storage.lrange(history_key(feature), 0, max > 0 ? max - 1 : max) || []
+    history.map do |entry|
+      parse_history_record(entry)
+    end
+  end
+
+  def write_history(feature, op, uid, comment)
+    if uid || comment
+      @storage.lpush(
+        history_key(feature.name),
+        create_history_record(feature, op, uid, comment)
+      )
+    end
   end
 
   private
@@ -527,6 +569,25 @@ class Rollout
     f = get(feature)
     yield(f)
     save(f)
+  end
+
+  def history_key(name)
+    "feature:#{name}:history"
+  end
+
+  def create_history_record(feature, op, uid, comment)
+    "#{op} #{uid} #{Time.now.to_i} #{feature.percentage} #{comment}"
+  end
+
+  def parse_history_record(str)
+    op, uid, time_int, new_val, comment = str.split(' ', 5)
+    {
+      op: op.to_sym,
+      uid: uid.to_i,
+      timestamp: Time.at(time_int.to_i),
+      new_value: new_val,
+      comment: comment
+    }
   end
 
   class FeatureFactory
